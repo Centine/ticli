@@ -17,6 +17,16 @@ var awsAuthCheck = &cobra.Command{
 	Short: "Checks that prerequisites are met for signing into cloud platforms",
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println("aws-auth check command invoked")
+
+		// Not sure what to do here.... validate AD credentials?
+	},
+}
+
+var awsAuthFix = &cobra.Command{
+	Use:   "fix",
+	Short: "Attempts to fix common issues with AWS Authentication",
+	Run: func(cmd *cobra.Command, args []string) {
+		fmt.Println("aws-auth fix command invoked")
 		// You would add your functionality here
 	},
 }
@@ -32,5 +42,5 @@ var awsAuthLoginCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(awsAuthCmd)
-	awsAuthCmd.AddCommand(awsAuthCheck, awsAuthLoginCmd)
+	awsAuthCmd.AddCommand(awsAuthCheck, awsAuthLoginCmd, awsAuthFix)
 }

@@ -4,29 +4,45 @@
 
 package checks
 
-type DarwinChecker struct{}
+import (
+	"github.com/centine/ticli/internal/config"
+)
+
+type DarwinChecker struct {
+	ctx config.TicliContext
+}
+
+func NewPlatformChecker(ctx config.TicliContext) Checker {
+	return &DarwinChecker{
+		ctx: ctx,
+	}
+}
 
 var checks = []Check{}
 
-func (c DarwinChecker) DoCheck() []CheckResult {
+func (c *DarwinChecker) DoSetup() error {
+	// Deliberate no-op for now.
+	// TODO: Download darwin setup script
+	return nil
+}
+
+func (c *DarwinChecker) DoCleanup() error {
+	// TODO: implement clean-up
+	return nil
+}
+
+func (c *DarwinChecker) DoCheck() ([]CheckResult, error) {
 	results := make([]CheckResult, 0, len(checks))
 
 	for _, check := range checks {
 		pass, detail := check.Fn()
-		status := "Fail"
-		if pass {
-			status = "Pass"
-		}
+
 		results = append(results, CheckResult{
 			CheckName: check.Name,
-			Status:    status,
+			Status:    pass,
 			Notes:     detail,
 		})
 	}
 
-	return results
-}
-
-func NewChecker() Checker {
-	return &DarwinChecker{}
+	return results, nil
 }

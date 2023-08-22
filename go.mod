@@ -3,8 +3,10 @@ module github.com/centine/ticli
 go 1.20
 
 require (
+	github.com/Masterminds/semver v1.5.0
 	github.com/pterm/pterm v0.12.63
 	github.com/spf13/cobra v1.7.0
+	golang.org/x/exp v0.0.0-20220909182711-5c715a9e8561
 	golang.org/x/sys v0.10.0
 )
 

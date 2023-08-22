@@ -15,6 +15,7 @@ func main() {
 
 	pterm.Info.Printfln("ticli v%s, build %s.", Version, Build) // Print Info.
 	checkForUpdates()
+
 	cmd.Execute()
 
 }

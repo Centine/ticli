@@ -9,13 +9,29 @@ import (
 	"fmt"
 	"os/exec"
 
+	"github.com/centine/ticli/internal/config"
 	"golang.org/x/sys/windows"
 )
 
-type WindowsChecker struct{}
+type WindowsChecker struct {
+	ctx config.TicliContext
+}
 
-func NewChecker() Checker {
-	return &WindowsChecker{}
+func NewPlatformChecker(ctx config.TicliContext) Checker {
+	return &WindowsChecker{ 
+		ctx: ctx
+	}
+}
+
+func (c *WindowsChecker) DoSetup() error {
+	// Deliberate no-op for now.
+	// TODO: Download windows setup script
+	return nil
+}
+
+func (c *WindowsChecker) DoCleanup() error {
+	// TODO: implement clean-up
+	return nil
 }
 
 var checks = []Check{
@@ -30,8 +46,6 @@ var checks = []Check{
 }
 
 func CheckPSInstalled() (bool, string) {
-	fmt.Println("Executing Windows-native specific checks...")
-
 	cmd := exec.Command("powershell", "-Command", "echo 'Testing powershell'")
 	if err := cmd.Run(); err != nil {
 		return false, "Powershell is not installed or not in the PATH"
@@ -45,7 +59,7 @@ func CheckWindowsVersion() (bool, string) {
 	return true, fmt.Sprintf("Windows version is %s.%s.%s", maj, min, patch)
 }
 
-func (c WindowsChecker) DoCheck() []CheckResult {
+func (c *WindowsChecker) DoCheck() ([]CheckResult, error) {
 	results := make([]CheckResult, 0, len(checks))
 
 	for _, check := range checks {
@@ -61,5 +75,5 @@ func (c WindowsChecker) DoCheck() []CheckResult {
 		})
 	}
 
-	return results
+	return results, nil
 }
