@@ -14,29 +14,24 @@ type TicliContext struct {
 }
 
 type ConfigStruct struct {
-	K8sConfigs      []K8sConfig      `json:"k8s_configs"`
-	ToolVersions    []ToolVersion    `json:"tool_versions"`
-	RuleBasedChecks []RuleBasedCheck `json:"rule_based_checks"`
+	WorkstationConfig WorkstationConfig `json:"workstation_config"`
+	K8sConfigs        []K8sConfig       `json:"k8s_configs"`
+	Rules             []Rule            `json:"rules"`
+}
+
+type Rule struct {
+	Type          string          `json:"type"`
+	Specification json.RawMessage `json:"specification"`
+}
+
+type WorkstationConfig struct {
+	MinCores  int `json:"min_cores"`
+	MinMemory int `json:"min_memory_gb"`
 }
 
 type K8sConfig struct {
 	Name          string `json:"name"`
 	KubeconfigUrl string `json:"kubeconfig_url"`
-}
-
-type ToolVersion struct {
-	Tool       string `json:"tool"`
-	Platform   string `json:"platform"`
-	MinVersion string `json:"min_version"`
-}
-
-type RuleBasedCheck struct {
-	Type                  string   `json:"type"`
-	PlatformCompatibility string   `json:"platform_compatibility"`
-	Prerequisites         []string `json:"prereqs"`
-	Command               string   `json:"command"`
-	OutputRegex           string   `json:"output_regex"`
-	AllowableExitCodes    []int    `json:"allowable_exit_codes"`
 }
 
 func LoadConfig() (string, ConfigStruct) {
@@ -50,9 +45,6 @@ func LoadConfig() (string, ConfigStruct) {
 	if err = json.Unmarshal(file, &ticliStructConfig); err != nil {
 		log.Fatalf("Error unmarshaling JSON: %v", err)
 	}
-
-	// Now you can use the `config` variable throughout your application.
-	// To access fields, you would need to do type assertions.
 
 	log.Println("Loaded config file")
 

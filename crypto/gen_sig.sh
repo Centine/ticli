@@ -8,8 +8,15 @@ fi
 
 # Check if the private key file exists
 PRIVATE_KEY="ticli_private_key.pem"
-if [ ! -f "$PRIVATE_KEY" ]; then
-  echo "Private key file $PRIVATE_KEY does not exist."
+PRIVATE_KEY_PATH=""
+SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+
+if [ -f "$PRIVATE_KEY" ]; then
+  PRIVATE_KEY_PATH="$PRIVATE_KEY"
+elif [ -f "$SCRIPT_DIR/$PRIVATE_KEY" ]; then
+  PRIVATE_KEY_PATH="$SCRIPT_DIR/$PRIVATE_KEY"
+else
+  echo "Private key file $PRIVATE_KEY does not exist in the current directory or the script's directory."
   exit 1
 fi
 
@@ -19,7 +26,7 @@ INPUT_FILE="$1"
 OUTPUT_FILE="${INPUT_FILE}.sig"
 
 # Sign the file using OpenSSL and the private key
-openssl dgst -sha256 -sign "$PRIVATE_KEY" -out "$OUTPUT_FILE" "$INPUT_FILE"
+openssl dgst -sha256 -sign "$PRIVATE_KEY_PATH" -out "$OUTPUT_FILE" "$INPUT_FILE"
 
 if [ $? -eq 0 ]; then
   echo "File successfully signed. Signature saved to $OUTPUT_FILE."

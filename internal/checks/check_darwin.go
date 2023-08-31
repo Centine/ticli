@@ -5,6 +5,8 @@
 package checks
 
 import (
+	"os/exec"
+
 	"github.com/centine/ticli/internal/config"
 )
 
@@ -18,31 +20,32 @@ func NewPlatformChecker(ctx config.TicliContext) Checker {
 	}
 }
 
-var checks = []Check{}
+var checks_platform = []Check{
+	{CheckName: "Bash installed", Fn: checkBash},
+}
 
 func (c *DarwinChecker) DoSetup() error {
 	// Deliberate no-op for now.
-	// TODO: Download darwin setup script
 	return nil
 }
 
 func (c *DarwinChecker) DoCleanup() error {
-	// TODO: implement clean-up
+	// Deliberate no-op for now.
 	return nil
 }
 
 func (c *DarwinChecker) DoCheck() ([]CheckResult, error) {
-	results := make([]CheckResult, 0, len(checks))
+	return generic_check_iterator(checks_platform, c, c.ctx)
+}
 
-	for _, check := range checks {
-		pass, detail := check.Fn()
+func (c *DarwinChecker) CheckerName() string {
+	return "PlatformChecker"
+}
 
-		results = append(results, CheckResult{
-			CheckName: check.Name,
-			Status:    pass,
-			Notes:     detail,
-		})
+func checkBash(ctx config.TicliContext) (CheckStatus, string, error) {
+	path, err := exec.LookPath("bash")
+	if err != nil {
+		return StatusFail, "No bash shell located", nil
 	}
-
-	return results, nil
+	return StatusSuccess, "Bash shell located at " + path, nil
 }

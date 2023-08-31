@@ -77,3 +77,7 @@ func (c *WindowsChecker) DoCheck() ([]CheckResult, error) {
 
 	return results, nil
 }
+
+func (c *WindowsChecker) CheckerName() string {
+	return "PlatformChecker"
+}

@@ -1,13 +1,18 @@
 package checks
 
 import (
+	"encoding/json"
 	"fmt"
+	"log"
+	"net"
+	"os"
 	"os/exec"
 	"regexp"
+	"strings"
+	"time"
 
 	"github.com/Masterminds/semver"
 	"github.com/centine/ticli/internal/config"
-	"golang.org/x/exp/slices"
 )
 
 // Rule-based checks go in here.
@@ -22,6 +27,10 @@ func newRuleBasedChecker(ctx config.TicliContext) Checker {
 	}
 }
 
+func (c *RulebasedChecker) CheckerName() string {
+	return "Rule"
+}
+
 func (c *RulebasedChecker) DoSetup() error {
 	// Deliberate no-op for now.
 	return nil
@@ -31,104 +40,190 @@ func (c *RulebasedChecker) DoCleanup() error {
 	return nil
 }
 
-func (gc *RulebasedChecker) DoCheck() ([]CheckResult, error) {
-	platformOverrideFlag := "Linux" // FIXME
+func (c *RulebasedChecker) DoCheck() ([]CheckResult, error) {
 	checkResults := make([]CheckResult, 0)
 
-	for _, dynCheck := range gc.ctx.Config.RuleBasedChecks {
-		var result *CheckResult
-		var err error
+	log.Println("Checking rule-based checks")
 
-		switch dynCheck.Type {
-		case "command_compare_versions":
-			fmt.Printf("Running command_compare_versions: %s\n", dynCheck.Command)
-			result, err = gc.performCommandCompareVersions(dynCheck)
-		case "command_exists_in_path":
-			fmt.Printf("Running command_compare_versions: %s\n", dynCheck.Command)
-			result, err = gc.performCommandExistsInPath(dynCheck)
-
+	for _, rule := range c.ctx.Config.Rules {
+		switch rule.Type {
+		case "tcp_connectivity":
+			var check tcpConnectivityCheck
+			if err := json.Unmarshal(rule.Specification, &check); err != nil {
+				log.Fatalf("configuration error: %v", err)
+			}
+			checkResults = append(checkResults, c.checkTCPConnectivity(check))
+		case "env_var":
+			var check environmentVariableCheck
+			if err := json.Unmarshal(rule.Specification, &check); err != nil {
+				log.Fatalf("configuration error: %v", err)
+			}
+			checkResults = append(checkResults, c.checkEnvVar(check))
+		case "http_connectivity":
+			var check httpConnectivityCheck
+			if err := json.Unmarshal(rule.Specification, &check); err != nil {
+				log.Fatalf("configuration error: %v", err)
+			}
+			// TODO now use check
+		case "validate_tool":
+			var check toolValidationCheck
+			if err := json.Unmarshal(rule.Specification, &check); err != nil {
+				log.Fatalf("configuration error: %v", err)
+			}
+			checkResults = append(checkResults, c.checkTool(check)...)
 		default:
-			fmt.Printf("Unknown dynamic check type: %s\n", dynCheck.Type)
+			// unknown type
 		}
-
-		if err != nil {
-			fmt.Printf("Error running: %+v, error: %v\n", dynCheck, err)
-		}
-
-		fmt.Printf("Platform %s\nResult %+v\n", platformOverrideFlag, result)
-
 	}
+
 	return checkResults, nil // TODO: return errors
 }
 
-func (gc *RulebasedChecker) performCommandExistsInPath(check config.RuleBasedCheck) (*CheckResult, error) {
-	path, err := exec.LookPath(check.Command)
-	if err != nil {
-		fmt.Printf("%s not found in PATH\n", check.Command)
-	} else {
-		fmt.Printf("%s found at path %s\n", check.Command, path)
-	}
-
-	_, err = exec.Command("sh", "-c", check.Command).Output()
-	if err != nil {
-		fmt.Println("Error executing command:", err)
-		return nil, err
-	}
-	return &CheckResult{
-		CheckName: "performCommandExistsInPath: " + check.Command,
-		Status:    true,
-		Notes:     "found in path " + path,
-	}, nil
+type toolValidationCheck struct {
+	Tool                    string              `json:"tool"`
+	Platform                string              `json:"platform"`
+	VersionDetectionCommand string              `json:"version_detection_command"`
+	VersionRegex            string              `json:"version_regex"`
+	MinVersions             []map[string]string `json:"min_versions"`
 }
 
-func (gc *RulebasedChecker) performCommandCompareVersions(check config.RuleBasedCheck) (*CheckResult, error) {
-	cmdOutput, err := exec.Command("sh", "-c", check.Command).Output()
-	if err != nil {
-		exitError, ok := err.(*exec.ExitError)
-		if ok {
-			// The command failed to run; we can get the exit code
-			exitCode := exitError.ExitCode()
-			if !slices.Contains(check.AllowableExitCodes, exitCode) {
-				fmt.Printf("Error executing command, output '%s', error: %v\n", cmdOutput, err)
-				return nil, err
+type tcpConnectivityCheck struct {
+	Host string `json:"host"`
+	Port int    `json:"port"`
+}
 
-			}
-		} else {
-			fmt.Printf("Error executing command, output '%s', error: %v\n", cmdOutput, err)
-			return nil, err
+type httpConnectivityCheck struct {
+	URL                        string            `json:"url"`
+	Method                     string            `json:"method"`
+	Headers                    map[string]string `json:"headers"`
+	ResponseAcceptableStatuses []int             `json:"response_acceptable_status_codes"`
+}
+
+type environmentVariableCheck struct {
+	Name   string `json:"name"`
+	Prefix string `json:"prefix"`
+}
+
+func (gc *RulebasedChecker) checkTCPConnectivity(check tcpConnectivityCheck) CheckResult {
+	address := fmt.Sprintf("%s:%d", check.Host, check.Port)
+	conn, err := net.DialTimeout("tcp", address, 5*time.Second)
+
+	if err != nil {
+		return CheckResult{
+			CheckName: "TCP Connectivity",
+			Status:    StatusFail,
+			Notes:     fmt.Sprintf("Failed to connect to %s, error %v", address, err),
+			Source:    gc.CheckerName(),
 		}
 	}
 
-	re := regexp.MustCompile(check.OutputRegex)
-	matches := re.FindAllStringSubmatch(string(cmdOutput), -1)
+	conn.Close()
 
+	return CheckResult{
+		CheckName: "TCP Connectivity",
+		Status:    StatusSuccess,
+		Notes:     fmt.Sprintf("Successfully connected to %s", address),
+		Source:    gc.CheckerName(),
+	}
+}
+
+func (gc *RulebasedChecker) checkEnvVar(check environmentVariableCheck) CheckResult {
+	val, exists := os.LookupEnv(check.Name)
+	checkName := "Env " + check.Name
+	if !exists {
+		cr := newCheckResult(checkName, StatusWarning, fmt.Sprintf("Env %s not set", check.Name), withSource(gc.CheckerName()))
+		return cr
+	} else if check.Prefix != "" && !strings.HasPrefix(val, check.Prefix) {
+		cr := newCheckResult(checkName, StatusWarning, fmt.Sprintf("Env %s set to %s, unexpected prefix %s", check.Name, val, check.Prefix), withSource(gc.CheckerName()))
+		return cr
+	} else {
+		cr := newCheckResult(checkName, StatusSuccess, fmt.Sprintf("Env %s exists (%s)", check.Name, val), withSource(gc.CheckerName()))
+		return cr
+	}
+}
+
+func (gc *RulebasedChecker) checkTool(tool toolValidationCheck) []CheckResult {
+	var results []CheckResult
+
+	// Check if tool is installed
+	path, err := exec.LookPath(tool.Tool)
+	if err != nil {
+		cr := newCheckResult(tool.Tool, StatusFail, "Tool not found in PATH", withSource(gc.CheckerName()))
+		results = append(results, cr)
+		return results
+	}
+
+	foundCr := newCheckResult(tool.Tool, StatusSuccess, fmt.Sprintf("Tool found in path (%s)", path), withSource(gc.CheckerName()))
+	results = append(results, foundCr)
+
+	// Execute version detection command
+	cmdParts := strings.Fields(tool.VersionDetectionCommand)
+	cmd := exec.Command(path, cmdParts[1:]...)
+	output, err := cmd.CombinedOutput()
+	if err != nil && (cmd.ProcessState.ExitCode() > 1) {
+		cr := newCheckResult(tool.Tool, StatusFail, "Error executing version detection command: "+err.Error(), withSource(gc.CheckerName()))
+		results = append(results, cr)
+		return results
+	}
+
+	// Extract version using regex - ignore error codes
+	re := regexp.MustCompile("(?i)(?m)" + tool.VersionRegex)
+	matches := re.FindAllStringSubmatch(string(output), -1)
+	if matches == nil {
+		cr := newCheckResult(tool.Tool, StatusFail, "Unable to find any version strings in output, using regex "+tool.VersionRegex+" on output "+string(output), withSource(gc.CheckerName()))
+		results = append(results, cr)
+		return results
+	}
+
+	matchedVersions := make(map[string]*semver.Version)
 	for _, match := range matches {
 		if len(match) < 3 {
-			return nil, fmt.Errorf("failed to match regex: %s", re.String())
+			continue
 		}
+		versionKey := match[1]
+		versionValue := match[2]
+		semVerVersion, err := semver.NewVersion(versionValue)
+		if err != nil {
+			cr := newCheckResult(tool.Tool, StatusFail, "Error parsing version: "+err.Error(), withSource(gc.CheckerName()))
+			results = append(results, cr)
+		}
+		matchedVersions[versionKey] = semVerVersion
+	}
 
-		tool := match[1]
-		version := match[2]
-		fmt.Printf("!!!! Match %s %s\n", tool, version)
-		for _, v := range gc.ctx.Config.ToolVersions {
-			if v.Tool == tool || v.Platform == "*" {
-				minVersion, err := semver.NewVersion(v.MinVersion)
+	for _, minVersion := range tool.MinVersions {
+		log.Printf("Checking version key %v for tool %s\n", minVersion, tool.Tool)
+
+		for minVersionKey, requiredVersionStr := range minVersion {
+			outputMatch := matchedVersions[minVersionKey]
+			if outputMatch != nil {
+				requiredVersion, err := semver.NewVersion(requiredVersionStr)
 				if err != nil {
-					return nil, fmt.Errorf("error parsing semantic version: %v", err)
+					log.Fatalf("Unable to parse version key %s for tool %s", tool.Tool, requiredVersionStr)
 				}
-
-				actualVersion, err := semver.NewVersion(version)
-				if err != nil {
-					return nil, fmt.Errorf("error parsing semantic version: %v", err)
-				}
-
-				if actualVersion.LessThan(minVersion) {
-					fmt.Printf("%s version is less than the minimum required version (%s < %s)\n", tool, actualVersion, minVersion)
+				if outputMatch.LessThan(requiredVersion) {
+					cr := newCheckResult(
+						tool.Tool+" "+strings.ToLower(minVersionKey),
+						StatusFail,
+						fmt.Sprintf("Version %v of %v is less than minimum required %v", outputMatch, minVersionKey, requiredVersionStr),
+						withSource(gc.CheckerName()))
+					results = append(results, cr)
 				} else {
-					fmt.Printf("%s version is okay (%s >= %s)\n", tool, actualVersion, minVersion)
+					cr := newCheckResult(
+						tool.Tool+" "+strings.ToLower(minVersionKey),
+						StatusSuccess,
+						"Version meets requirement",
+						withSource(gc.CheckerName()))
+					results = append(results, cr)
 				}
+			} else {
+				cr := newCheckResult(
+					tool.Tool+" "+strings.ToLower(minVersionKey),
+					StatusFail,
+					fmt.Sprintf("Unable to find version key %v in output %v", minVersionKey, string(output)),
+					withSource(gc.CheckerName()))
+				results = append(results, cr)
 			}
 		}
 	}
-	return nil, nil
+	return results
 }

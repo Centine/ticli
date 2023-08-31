@@ -13,6 +13,12 @@ ticli
 # Keys
 crypto/*private*
 
+# bundles
+scriptbundles/*zip
+
+# Config files
+ticli.config.json
+
 # Test binary, built with `go test -c`
 *.test
 

@@ -11,6 +11,7 @@ import (
 )
 
 var dirPerms fs.FileMode = 0750 // rwxr-x---
+var subdirs = []string{"scriptbundles"}
 
 func createDir(dir string) error {
 	if err := os.MkdirAll(dir, dirPerms); err != nil {
@@ -70,6 +71,15 @@ func SetupTicliEnv() (string, error) {
 	err = createDir(homeDir)
 	if err != nil {
 		log.Println("Error creating ticli home directory")
+		return "", err
+	}
+
+	for _, subdir := range subdirs {
+		err = createDir(filepath.Join(homeDir, subdir))
+		if err != nil {
+			log.Println("Error creating ticli home subdirectory ", subdir)
+			return "", err
+		}
 	}
 	log.Println("Ticli home directory:", homeDir)
 

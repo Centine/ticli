@@ -11,6 +11,8 @@ import (
 	"net/http/httptest"
 	"os"
 	"testing"
+
+	ticlicrypto "github.com/centine/ticli/crypto"
 )
 
 func TestDownloadFileSuccess(t *testing.T) {
@@ -51,7 +53,7 @@ func TestVerifySignatureSuccess(t *testing.T) {
 		t.Fatalf("Error marshaling public key: %v", err)
 	}
 	// WARNING: HAS SIDE EFFECTS, OVERWRITES GLOBAL VARIABLE
-	publicKeyPem = pem.EncodeToMemory(&pem.Block{
+	ticlicrypto.PublicKeyPem = pem.EncodeToMemory(&pem.Block{
 		Type:  "PUBLIC KEY",
 		Bytes: pubKeyBytes,
 	})
