@@ -9,6 +9,7 @@ import (
 
 	"github.com/centine/ticli/internal/config"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 var rootCmd = &cobra.Command{
@@ -66,4 +67,10 @@ func Execute() {
 		fmt.Println(err)
 		os.Exit(1)
 	}
+}
+
+func init() {
+	log.Println("Initializing root command")
+	viper.SetEnvPrefix("TICLI")
+	viper.AutomaticEnv()
 }

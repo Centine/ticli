@@ -1,9 +1,14 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
+	"log"
+	"os"
 
+	ssu_apiclient "github.com/centine/ssu_openapi"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 var selfServiceCmd = &cobra.Command{
@@ -14,9 +19,10 @@ var selfServiceCmd = &cobra.Command{
 }
 
 var capabilityCmd = &cobra.Command{
-	Use:   "capability",
-	Short: "Capability operations",
-	Long:  `Operations related to capabilities`,
+	Use:     "capability",
+	Aliases: []string{"cap"},
+	Short:   "Capability operations",
+	Long:    `Operations related to capabilities`,
 }
 
 var getCapabilitiesCmd = &cobra.Command{
@@ -24,7 +30,36 @@ var getCapabilitiesCmd = &cobra.Command{
 	Short: "Get capability",
 	Long:  `Fetch information about a specific capability`,
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("get invoked")
+		log.Println("ssu get capability invoked")
+
+		// fmt.Println("Flag auth-token:", cmd.Flag("auth-token").Value.String())
+		// fmt.Println("Viper auth-token:", viper.GetString("auth-token"))
+		// fmt.Println("Flag cookie:", cmd.Flag("cookie").Value.String())
+		// fmt.Println("Viper cookie:", viper.GetString("cookie"))
+
+		configuration := ssu_apiclient.NewConfiguration()
+		at := os.Getenv("TICLI_AUTH_TOKEN")
+		ct := os.Getenv("TICLI_COOKIE")
+		configuration.AddDefaultHeader("Authorization", at)
+		configuration.AddDefaultHeader("cookie", ct)
+		// configuration.AddDefaultHeader("Authorization", cmd.Flag("auth-token").Value.String())
+		// configuration.AddDefaultHeader("cookie", cmd.Flag("cookie").Value.String())
+		apiClient := ssu_apiclient.NewAPIClient(configuration)
+		resp, httpRes, err := apiClient.CapabilityApi.CapabilitiesGet(context.Background()).Execute()
+		if err != nil {
+			fmt.Println("Error fetching capabilities: ", err)
+			return
+		}
+		if httpRes.StatusCode != 200 {
+			fmt.Println("Error fetching capabilities: ", httpRes.Status)
+			return
+		}
+		fmt.Println("Capabilities:")
+		for _, cap := range resp.GetItems() {
+
+			fmt.Printf("Cap %v\n", cap.GetName())
+		}
+
 	},
 }
 
@@ -68,6 +103,7 @@ var describeTopicsCmd = &cobra.Command{
 }
 
 var ssAuthToken string
+var ssAuthCookie string
 
 func init() {
 	rootCmd.AddCommand(selfServiceCmd)
@@ -76,7 +112,13 @@ func init() {
 	capabilityCmd.AddCommand(describeCapabilitiesCmd)
 
 	selfServiceCmd.PersistentFlags().StringVarP(&ssAuthToken, "auth-token", "t", "", "Self service auth token")
-	selfServiceCmd.MarkPersistentFlagRequired("auth-token")
+	selfServiceCmd.PersistentFlags().StringVarP(&ssAuthCookie, "cookie", "c", "", "Self service cookie token")
+	// selfServiceCmd.MarkPersistentFlagRequired("auth-token")
+	// selfServiceCmd.MarkPersistentFlagRequired("cookie")
+
+	// Bind flags to Viper configuration
+	viper.BindPFlag("auth-token", selfServiceCmd.PersistentFlags().Lookup("auth-token"))
+	viper.BindPFlag("cookie", selfServiceCmd.PersistentFlags().Lookup("cookie"))
 
 	getCapabilitiesCmd.Flags().BoolVarP(&getAll, "all", "a", false, "Get all capabilities, not just the ones you have access to")
 	getTopicsCmd.Flags().BoolVarP(&getAll, "all", "a", false, "Get all topics, not just the ones you have access to")
